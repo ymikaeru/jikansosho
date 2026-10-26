@@ -1,0 +1,14 @@
+# Fontes copiadas do new_mioshie_zenshu (repositório privado, inclui traduções):
+# ficam só na máquina local; o site usa apenas data/*.js gerados a partir delas.
+source/
+
+# Rascunhos de áudio (amostras de voz e pedaços usados para emendar capítulos)
+audio/amostras/
+audio/*/_partes/
+
+# Local
+.claude/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db

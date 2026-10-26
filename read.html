@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>光への道 ｜ 自観叢書</title>
+<meta name="description" content="明主様の御論文集『自観叢書』を、大きな文字と読み上げで気軽に。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=BIZ+UDMincho:wght@400;700&family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/site.css">
+<script src="js/common.js"></script>
+</head>
+<body class="page-read">
+
+<header class="topbar">
+  <a class="chip" href="index.html" aria-label="トップへもどる">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>トップ
+  </a>
+  <button class="chip" type="button" id="btnToc" aria-haspopup="dialog">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/></svg>目次
+  </button>
+  <span class="where" id="where"></span>
+  <button class="chip" type="button" id="btnSettings" aria-haspopup="dialog">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2.2"/><circle cx="10" cy="17" r="2.2"/></svg>文字<span class="lg">・表示</span>
+  </button>
+</header>
+
+<main class="reader" id="reader" lang="ja" tabindex="-1"></main>
+
+<button class="follow-btn" id="btnFollow" type="button" hidden>読んでいる所へ ↓</button>
+
+<!-- Player: grande, com rótulos em palavras -->
+<div class="player" role="region" aria-label="読み上げ">
+  <div class="player-row">
+    <button class="pbtn" type="button" id="btnPrev" aria-label="前の文へ">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h2v14H6zM20 5v14L9.5 12z"/></svg>
+    </button>
+    <button class="pbtn pbtn-main" type="button" id="btnPlay">
+      <svg class="ico-play" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l13-7.5z"/></svg>
+      <svg class="ico-stop" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4.5" height="14" rx="1"/><rect x="13.5" y="5" width="4.5" height="14" rx="1"/></svg>
+      <span id="playLabel">聞く</span>
+    </button>
+    <button class="pbtn" type="button" id="btnNext" aria-label="次の文へ">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16 5h2v14h-2zM4 5v14l10.5-7z"/></svg>
+    </button>
+    <button class="pbtn pbtn-rate" type="button" id="btnRate" aria-label="読み上げの速さ"></button>
+  </div>
+  <p class="player-msg" id="playerMsg" role="status"></p>
+</div>
+
+<!-- 目次 -->
+<div class="sheet" id="sheetToc" role="dialog" aria-modal="true" aria-labelledby="tocTitle">
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="tocTitle">目次</h2>
+      <button class="chip" type="button" data-close>閉じる ✕</button>
+    </div>
+    <ol class="toc" id="tocList"></ol>
+  </div>
+</div>
+
+<!-- 文字・表示 -->
+<div class="sheet" id="sheetSettings" role="dialog" aria-modal="true" aria-labelledby="setTitle">
+  <div class="sheet-backdrop" data-close></div>
+  <div class="sheet-card">
+    <div class="sheet-head">
+      <h2 id="setTitle">文字・表示の設定</h2>
+      <button class="chip" type="button" data-close>閉じる ✕</button>
+    </div>
+
+    <div class="opt">
+      <p class="sample">これは私の自舒伝である。<ruby>洵<rt>まこと</rt></ruby>に平凡で…</p>
+    </div>
+    <div class="opt">
+      <p class="opt-label">文字の大きさ</p>
+      <div class="seg" id="optSize"></div>
+    </div>
+    <div class="opt">
+      <p class="opt-label">書体</p>
+      <div class="seg" data-key="font">
+        <button type="button" data-val="gothic" style="font-family:var(--font-gothic)">ゴシック</button>
+        <button type="button" data-val="mincho" style="font-family:var(--font-mincho)">明朝</button>
+      </div>
+    </div>
+    <div class="opt">
+      <p class="opt-label">背景の色</p>
+      <div class="seg" data-key="theme">
+        <button type="button" data-val="light">白<span class="sw" style="background:#fbf8f1"></span></button>
+        <button type="button" data-val="cream">クリーム<span class="sw" style="background:#f4ecd8"></span></button>
+        <button type="button" data-val="dark">黒<span class="sw" style="background:#17150f"></span></button>
+        <button type="button" data-val="contrast">見やすさ優先<span class="sw" style="background:#000;border-color:#ff0"></span></button>
+      </div>
+    </div>
+    <div class="opt">
+      <p class="opt-label">行の間隔</p>
+      <div class="seg" data-key="spacing">
+        <button type="button" data-val="normal">ふつう</button>
+        <button type="button" data-val="wide">ひろめ</button>
+      </div>
+    </div>
+    <div class="opt">
+      <p class="opt-label">ふりがな</p>
+      <div class="seg" data-key="ruby">
+        <button type="button" data-val="true">表示する</button>
+        <button type="button" data-val="false">表示しない</button>
+      </div>
+      <p class="hint">原文にある読みがなを、漢字の上に小さく表示します。</p>
+    </div>
+    <div class="opt">
+      <p class="opt-label">書き方</p>
+      <div class="seg" data-key="vertical">
+        <button type="button" data-val="false">横書き</button>
+        <button type="button" data-val="true">縦書き</button>
+      </div>
+    </div>
+
+    <h2 style="font-size:19px;margin:28px 0 0">読み上げ</h2>
+    <div class="opt" id="optEngineWrap">
+      <p class="opt-label">読み上げの声</p>
+      <div class="seg" data-key="engine">
+        <button type="button" data-val="audio">朗読<br><small>自然な声・おすすめ</small></button>
+        <button type="button" data-val="tts">端末の音声</button>
+      </div>
+      <p class="hint">「朗読」は画面を消しても聞き続けられます（通信が必要です）。</p>
+    </div>
+    <div class="opt">
+      <p class="opt-label">速さ</p>
+      <div class="seg" id="optRate"></div>
+    </div>
+    <div class="opt" id="optVoiceWrap">
+      <p class="opt-label"><label for="optVoice">端末の声</label></p>
+      <select id="optVoice"></select>
+      <p class="hint" id="voiceHint">声の種類は、お使いの端末によって変わります。</p>
+    </div>
+    <div class="opt">
+      <p class="opt-label">一話を聞き終えたら</p>
+      <div class="seg" data-key="autoNext">
+        <button type="button" data-val="true">次の話へ進む</button>
+        <button type="button" data-val="false">止まる</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="data/vol09.js"></script>
+<script src="data/vol09_audio.js"></script>
+<script src="js/karaoke.js"></script>
+<script src="js/reader.js"></script>
+</body>
+</html>
