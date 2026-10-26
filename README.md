@@ -61,8 +61,17 @@ python scripts/audio_pipeline.py align 9            # todos os capítulos
 python scripts/audio_pipeline.py align 9 --only 5   # só um capítulo
 ```
 
-Para corrigir a pronúncia de uma palavra:
-1. Adicione o trecho em `data/speech_fixes.json`.
-2. Rode o passo 2.
-3. Gere de novo **só** o MP3 do capítulo afetado.
-4. Rode `align 9 --only N`.
+Para achar e corrigir palavras lidas errado sem regravar capítulos inteiros:
+
+```bash
+# 1. Checagem: o Whisper ouve cada frase e compara a leitura em kana -> audio/vol09/qa/report.txt
+python scripts/qa_audio.py 9
+
+# 2. Depois de acrescentar as leituras certas em data/speech_fixes.json:
+python -I scripts/audio_pipeline.py diff 9     # lista as frases afetadas -> patches/todo.json
+
+# 3. Gere o TTS de cada "text" de todo.json em audio/vol09/patches/<file>
+
+# 4. Emenda no MP3, atualiza o script e realinha
+python scripts/audio_pipeline.py splice 9
+```

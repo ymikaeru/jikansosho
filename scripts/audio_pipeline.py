@@ -13,6 +13,13 @@ Passos (volume N):
   python -I scripts/audio_pipeline.py pack 9
       Só regrava data/volNN_audio.js a partir dos alinhamentos já feitos.
 
+Corrigir a pronúncia de algumas frases sem regravar o capítulo:
+  1. ajustar data/speech_fixes.json
+  2. python -I scripts/audio_pipeline.py diff 9   -> patches/todo.json
+  3. gerar o TTS de cada "text" do todo.json em patches/<file>
+  4. python scripts/audio_pipeline.py splice 9   (emenda, atualiza script, realinha)
+  (scripts/qa_audio.py ajuda a achar as leituras erradas)
+
 As unidades seguem exatamente a ordem do leitor (js/reader.js): título do
 capítulo, depois cada frase de cada bloco (no waka, cada verso).
 """
@@ -215,12 +222,116 @@ def cmd_pack(vol):
     print('gravado', out.relative_to(ROOT), '(%d capítulos, %d KB)' % (len(chapters), len(js.encode('utf-8')) // 1024))
 
 
+def word_spans(text, words):
+    """Posição de cada palavra alinhada no texto: [(ini, fim, t_ini, t_fim)]."""
+    spans, cur = [], 0
+    for w in words:
+        piece = w['w'].strip()
+        if not piece:
+            continue
+        i = text.find(piece, cur)
+        if i < 0 or i - cur > 40:
+            i = cur
+        spans.append((i, i + len(piece), w['s'], w['e']))
+        cur = i + len(piece)
+    return spans
+
+
+def cmd_diff(vol):
+    """Compara o texto gravado (audio/volNN/script) com o texto atual
+    (vol + speech_fixes) e lista as frases que precisam ser regravadas
+    -> audio/volNN/patches/todo.json"""
+    book = load_volume(vol)
+    fixes = load_fixes(vol)
+    d = vol_dir(vol)
+    todo = []
+    for n, ch in enumerate(book['chapters'], 1):
+        old_text = (d / 'script' / ('ch%02d.txt' % n)).read_text(encoding='utf-8')
+        old_units = json.loads((d / 'script' / ('ch%02d.units.json' % n)).read_text(encoding='utf-8'))
+        new_text, new_units = build_script(vol, n, ch, fixes)
+        if len(old_units) != len(new_units):
+            raise SystemExit('ch%02d: número de frases mudou; regrave o capítulo inteiro' % n)
+        for i, (ou, nu) in enumerate(zip(old_units, new_units)):
+            old = old_text[ou['start']:ou['end']]
+            new = new_text[nu['start']:nu['end']]
+            if old != new:
+                speak = new + ('。' if i == 0 else '')   # o título é falado com 。
+                todo.append({'ch': n, 'u': i, 'old': old, 'text': speak,
+                             'file': 'ch%02d_u%02d.mp3' % (n, i)})
+    (d / 'patches').mkdir(exist_ok=True)
+    (d / 'patches' / 'todo.json').write_text(json.dumps(todo, ensure_ascii=False, indent=1), encoding='utf-8')
+    for t in todo:
+        print('ch%02d u%02d  %s' % (t['ch'], t['u'], t['text']))
+    print('%d frases a regravar -> audio/vol%02d/patches/todo.json' % (len(todo), vol))
+
+
+def cmd_splice(vol):
+    """Troca no MP3 do capítulo o trecho de cada frase listada em todo.json
+    pelo áudio regravado (patches/chMM_uKK.mp3), mantendo a pausa original
+    depois da frase. Guarda o MP3 anterior em _partes/, atualiza o script e
+    realinha os capítulos alterados."""
+    import subprocess
+    d = vol_dir(vol)
+    todo = json.loads((d / 'patches' / 'todo.json').read_text(encoding='utf-8'))
+    by_ch = {}
+    for t in todo:
+        if not (d / 'patches' / t['file']).exists():
+            raise SystemExit('falta o áudio ' + t['file'])
+        by_ch.setdefault(t['ch'], []).append(t)
+    (d / '_partes').mkdir(exist_ok=True)
+    for n, items in sorted(by_ch.items()):
+        text = (d / 'script' / ('ch%02d.txt' % n)).read_text(encoding='utf-8')
+        units = json.loads((d / 'script' / ('ch%02d.units.json' % n)).read_text(encoding='utf-8'))
+        words = json.loads((d / 'align' / ('ch%02d.json' % n)).read_text(encoding='utf-8'))
+        spans = word_spans(text, words)
+        mp3 = d / ('ch%02d.mp3' % n)
+        src = d / '_partes' / ('ch%02d_antes_emenda.mp3' % n)
+        src.write_bytes(mp3.read_bytes())
+        # trechos: [original até a frase] [regravação] [pausa original] [original depois]
+        inputs = ['-i', str(src)]
+        filters, labels, pos = [], [], 0.0
+        for k, t in enumerate(sorted(items, key=lambda x: x['u'])):
+            u = units[t['u']]
+            inside = [s for s in spans if u['start'] <= s[0] < u['end']]
+            a = min(s[2] for s in inside)                 # início da fala da frase
+            b = max(s[3] for s in inside)                 # fim da fala da frase
+            nxt = [s for s in spans if s[0] >= u['end']]
+            gap = max(0.25, (min(s[2] for s in nxt) - b) if nxt else 0.6)
+            cut = max(pos, a - 0.05)
+            filters.append('[0:a]atrim=%.3f:%.3f,asetpts=PTS-STARTPTS[o%d]' % (pos, cut, k))
+            inputs += ['-i', str(d / 'patches' / t['file'])]
+            filters.append('[%d:a]aresample=44100,aformat=channel_layouts=mono,'
+                           'silenceremove=start_periods=1:start_threshold=-45dB,areverse,'
+                           'silenceremove=start_periods=1:start_threshold=-45dB,areverse[p%d]' % (k + 1, k))
+            filters.append('anullsrc=r=44100:cl=mono,atrim=0:%.3f[g%d]' % (gap, k))
+            labels += ['[o%d]' % k, '[p%d]' % k, '[g%d]' % k]
+            pos = b + gap
+        filters.append('[0:a]atrim=start=%.3f,asetpts=PTS-STARTPTS[tail]' % pos)
+        labels.append('[tail]')
+        filters.append('%sconcat=n=%d:v=0:a=1[out]' % (''.join(labels), len(labels)))
+        cmd = ['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y'] + inputs + [
+            '-filter_complex', ';'.join(filters), '-map', '[out]',
+            '-c:a', 'libmp3lame', '-b:a', '128k', str(mp3)]
+        subprocess.run(cmd, check=True)
+        print('ch%02d  %d frase(s) emendada(s)' % (n, len(items)))
+    # o texto gravado passa a ser o atual
+    cmd_script(vol)
+    return sorted(by_ch)
+
+
 def main():
     sys.stdout.reconfigure(encoding='utf-8')
     cmd, vol = sys.argv[1], int(sys.argv[2])
     args = sys.argv[3:]
     if cmd == 'script':
         cmd_script(vol)
+    elif cmd == 'diff':
+        cmd_diff(vol)
+    elif cmd == 'splice':
+        chs = cmd_splice(vol)
+        model = args[args.index('--model') + 1] if '--model' in args else 'medium'
+        if chs:
+            cmd_align(vol, model, set(chs))
     elif cmd == 'align':
         model = args[args.index('--model') + 1] if '--model' in args else 'medium'
         only = set(int(x) for x in args[args.index('--only') + 1].split(',')) if '--only' in args else None

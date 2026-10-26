@@ -5,6 +5,8 @@ source/
 # Rascunhos de áudio (amostras de voz e pedaços usados para emendar capítulos)
 audio/amostras/
 audio/*/_partes/
+audio/*/patches/
+audio/*/qa/
 
 # Local
 .claude/
