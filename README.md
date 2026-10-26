@@ -17,8 +17,11 @@ Começa com o volume 9, 「光への道」 (21 capítulos).
 
 | Caminho | Conteúdo |
 |---|---|
-| `index.html`, `read.html` | página inicial e leitor |
-| `js/common.js` | configurações, progresso, utilitários |
+| `index.html` + `js/shelf.js` | estante: um cartão por volume, com 続きから |
+| `volume.html?vol=N` + `js/volume.js` | capa e índice de um volume |
+| `read.html?vol=N&ch=M` | leitor |
+| `data/library.js` | lista de volumes publicados (para adicionar um volume, inclua uma linha aqui) |
+| `js/common.js` | configurações, progresso, volume da URL, utilitários |
 | `js/reader.js` | leitor (capítulos, configurações, rolagem que acompanha a leitura) |
 | `js/karaoke.js` | `AudioPlayer` (MP3 + tempos) e `Speaker` (voz do sistema) |
 | `data/vol09.js` | texto do volume, gerado |

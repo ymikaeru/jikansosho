@@ -1,16 +1,17 @@
 /* reader.js — leitor de um capítulo por tela, com karaokê (js/karaoke.js).
-   URL: read.html?ch=N[&s=K][&listen=1]   (N 1-based; K = índice da unidade)
+   URL: read.html?vol=V&ch=N[&s=K][&listen=1]   (N 1-based; K = índice da unidade)
    A troca de capítulo é feita na própria página (pushState) para que a
    leitura em voz alta possa seguir para o próximo capítulo sem novo gesto. */
 (function () {
   'use strict';
 
-  const VOL = 9;
+  const VOL = JKS.currentVol();
   const book = window.JIKAN_VOLUMES && window.JIKAN_VOLUMES[VOL];
   const $ = (id) => document.getElementById(id);
   const reader = $('reader');
   if (!book) { reader.textContent = 'データを読み込めませんでした。'; return; }
 
+  $('btnBack').href = 'volume.html?vol=' + VOL;
   const total = book.chapters.length;
   let chNo = 1;                 // capítulo atual (1-based)
   let units = [];
@@ -131,13 +132,13 @@
     reader.innerHTML = parts.join('');
 
     units = Array.from(reader.querySelectorAll('.s')).map((el, i) => ({ el, segs: segsList[i], gap: gaps[i] }));
-    if (speaker === narr) narr.load(units, AUDIO.chapters[chNo], ch.title);
+    if (speaker === narr) narr.load(units, AUDIO.chapters[chNo], ch.title, book.title);
     else tts.load(units);
     speaker.idx =Math.max(0, Math.min(unitIdx || 0, units.length - 1));
 
     $('where').textContent = '第' + chNo + '話 ／ 全' + total + '話';
     document.title = ch.title + '｜' + book.title + '｜自観叢書';
-    const url = 'read.html?ch=' + chNo;
+    const url = 'read.html?vol=' + VOL + '&ch=' + chNo;
     try { history[push ? 'pushState' : 'replaceState']({ ch: chNo }, '', url); } catch (e) {}
 
     JKS.saveLast(VOL, chNo, speaker.idx);
@@ -157,13 +158,13 @@
         '<p class="sub">全' + total + '話のうち ' + chNo + '話目まで来ました。</p>' +
         '<button class="btn btn-primary" type="button" data-go="' + (chNo + 1) + '">次の話へ進む' +
         '<span class="next-ttl">「' + JKS.escapeHtml(nx.ch.title) + '」 約' + nx.read + '分</span></button>' +
-        '<a class="btn" href="index.html">今日はここまで</a>' +
+        '<a class="btn" href="volume.html?vol=' + VOL + '">今日はここまで</a>' +
         '</section>';
     }
     return '<section class="ch-end">' +
       '<p class="done-msg">『' + JKS.escapeHtml(book.title) + '』を読み終えました。</p>' +
       '<p class="sub">最後まで、おつかれさまでした。</p>' +
-      '<a class="btn btn-primary" href="index.html">トップへもどる</a>' +
+      '<a class="btn btn-primary" href="index.html">自観叢書へもどる</a>' +
       '<div class="colophon"><h3>奥付</h3>' + book.colophon.map(JKS.escapeHtml).join('<br>') + '</div>' +
       '</section>';
   }
@@ -298,7 +299,7 @@
       const n = i + 1;
       const m = JKS.readMinutes(JKS.chapterChars(c));
       const isRead = prog.read.includes(n);
-      return '<li><a href="read.html?ch=' + n + '" data-ch="' + n + '" class="' + (isRead ? 'is-read' : '') + (n === chNo ? ' is-last' : '') + '"' +
+      return '<li><a href="read.html?vol=' + VOL + '&ch=' + n + '" data-ch="' + n + '" class="' + (isRead ? 'is-read' : '') + (n === chNo ? ' is-last' : '') + '"' +
         (n === chNo ? ' aria-current="page"' : '') + '>' +
         '<span class="num">' + (isRead ? '✓ ' : '') + '第' + n + '話</span>' +
         '<span class="ttl">' + JKS.escapeHtml(c.title) + '</span>' +

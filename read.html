@@ -9,13 +9,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=BIZ+UDMincho:wght@400;700&family=BIZ+UDPGothic:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/site.css">
+<script src="data/library.js"></script>
 <script src="js/common.js"></script>
 </head>
 <body class="page-read">
 
 <header class="topbar">
-  <a class="chip" href="index.html" aria-label="トップへもどる">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>トップ
+  <a class="chip" id="btnBack" href="index.html" aria-label="この巻の表紙へもどる">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6"/></svg>もどる
   </a>
   <button class="chip" type="button" id="btnToc" aria-haspopup="dialog">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><line x1="5" y1="7" x2="19" y2="7"/><line x1="5" y1="12" x2="19" y2="12"/><line x1="5" y1="17" x2="19" y2="17"/></svg>目次
@@ -144,8 +145,7 @@
   </div>
 </div>
 
-<script src="data/vol09.js"></script>
-<script src="data/vol09_audio.js"></script>
+<script>JKS.writeVolumeData(true);</script>
 <script src="js/karaoke.js"></script>
 <script src="js/reader.js"></script>
 </body>

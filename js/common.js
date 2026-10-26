@@ -4,7 +4,7 @@
   'use strict';
 
   const SETTINGS_KEY = 'jks.settings';
-  const SIZES = [18, 22, 26, 30, 36];            // 小・中・大・特大・最大
+  const SIZES = [16, 19, 22, 26, 30];            // 小・中・大・特大・最大
   const SIZE_LABELS = ['小', '中', '大', '特大', '最大'];
   const RATES = [0.75, 0.9, 1.0, 1.2];
   const RATE_LABELS = ['ゆっくり', '少しゆっくり', 'ふつう', 'はやめ'];
@@ -90,9 +90,31 @@
     return (t > 1 ? d[t] : '') + '十' + (o ? d[o] : '');
   }
 
+  /* --- Volumes (data/library.js) --- */
+  function library() { return window.JIKAN_LIBRARY || []; }
+  // ?vol=N validado contra a estante; sem parâmetro, o primeiro volume
+  function currentVol() {
+    let n = NaN;
+    try { n = parseInt(new URLSearchParams(location.search).get('vol'), 10); } catch (e) {}
+    const lib = library();
+    const hit = lib.find(v => v.vol === n);
+    return hit ? hit.vol : (lib[0] ? lib[0].vol : 9);
+  }
+  function volMeta(vol) { return library().find(v => v.vol === vol) || null; }
+  // Injeta, durante o parse, os <script> de dados do volume (texto e áudio),
+  // para que os scripts da página rodem já com window.JIKAN_VOLUMES pronto.
+  function writeVolumeData(withAudio) {
+    const vol = currentVol();
+    const meta = volMeta(vol);
+    const nn = String(vol).padStart(2, '0');
+    document.write('<script src="data/vol' + nn + '.js"><\/script>');
+    if (withAudio && meta && meta.audio) document.write('<script src="data/vol' + nn + '_audio.js"><\/script>');
+  }
+
   applySettings();
 
   window.JKS = {
+    library, currentVol, volMeta, writeVolumeData,
     SIZES, SIZE_LABELS, RATES, RATE_LABELS,
     get settings() { return settings; },
     setSetting, applySettings,

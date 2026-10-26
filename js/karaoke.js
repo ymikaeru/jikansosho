@@ -339,7 +339,7 @@
       this._mediaSession();
     }
 
-    load(units, chapterAudio, title) {
+    load(units, chapterAudio, title, album) {
       this.stop();
       this._leaveUnit();
       this.units = units;
@@ -352,7 +352,7 @@
       }
       this.audio.playbackRate = this.rate;
       if ('mediaSession' in navigator && window.MediaMetadata) {
-        navigator.mediaSession.metadata = new MediaMetadata({ title: title || '', artist: '岡田自観（明主様）', album: '光への道' });
+        navigator.mediaSession.metadata = new MediaMetadata({ title: title || '', artist: '岡田自観（明主様）', album: album || '自観叢書' });
       }
     }
 
