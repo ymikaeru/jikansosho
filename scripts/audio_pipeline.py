@@ -265,10 +265,68 @@ def cmd_diff(vol):
     print('%d frases a regravar -> audio/vol%02d/patches/todo.json' % (len(todo), vol))
 
 
+SIL_DB = -50.0      # abaixo disto o quadro conta como silêncio
+SIL_MIN = 0.12      # duração mínima de uma pausa entre frases (s)
+FRAME = 0.02
+
+
+def load_db(mp3):
+    """Energia em dB por quadro de 20 ms (via ffmpeg, 16 kHz mono)."""
+    import subprocess
+    import numpy as np
+    raw = subprocess.run(['ffmpeg', '-v', 'error', '-i', str(mp3), '-f', 's16le', '-ac', '1', '-ar', '16000', '-'],
+                         capture_output=True, check=True).stdout
+    x = np.frombuffer(raw, np.int16).astype(np.float32) / 32768
+    n = int(16000 * FRAME)
+    frames = x[:len(x) // n * n].reshape(-1, n)
+    return 20 * np.log10(np.sqrt((frames ** 2).mean(axis=1)) + 1e-9)
+
+
+def silent_runs(db, t0, t1):
+    """Pausas [(ini, fim)] em segundos dentro de [t0, t1]."""
+    runs, start = [], None
+    i0, i1 = max(0, int(t0 / FRAME)), min(len(db), int(t1 / FRAME))
+    for i in range(i0, i1):
+        if db[i] < SIL_DB:
+            start = i if start is None else start
+        else:
+            if start is not None and (i - start) * FRAME >= SIL_MIN:
+                runs.append((start * FRAME, i * FRAME))
+            start = None
+    if start is not None and (i1 - start) * FRAME >= SIL_MIN:
+        runs.append((start * FRAME, i1 * FRAME))
+    return runs
+
+
+def _best_pause(runs, edge, t):
+    """Pausa entre frases: a mais longa perto de t (as de vírgula são curtas,
+    ~0.1 s; as depois de 。 passam de 0.4 s), com penalidade pela distância."""
+    return max(runs, key=lambda r: (r[1] - r[0]) - 0.25 * abs(r[edge] - t))
+
+
+def speech_bounds(db, a, b, first=False):
+    """Início/fim REAIS da fala de uma frase. O alinhamento pode errar alguns
+    décimos (ex.: marcou 以上 em 169.72 s quando a fala começa em 169.3 s), e
+    cortar ali deixava pedaços da gravação antiga; no fim, o erro pode ser
+    para os dois lados (cap. 4: alinhado 41.58 s, pausa real 41.00–41.50 s e
+    a frase seguinte já em 41.52 s). Por isso procura dos dois lados a pausa
+    de fim de frase (_best_pause) e corta dentro dela. A 1ª frase do capítulo
+    (título) começa no início do arquivo, sem silêncio antes."""
+    # Janelas estreitas: a pausa é recortada pela janela, então mesmo que ela
+    # comece fora, o corte cai dentro dela; e pausas internas longas (versos de
+    # waka lidos devagar) ficam de fora.
+    before = [r for r in silent_runs(db, a - 0.8, a + 0.8) if not first]
+    start = _best_pause(before, 1, a)[1] - 0.04 if before else (0.0 if first else a - 0.3)
+    after = [r for r in silent_runs(db, b - 0.8, b + 1.2) if r[0] > start + 0.3]
+    end = _best_pause(after, 0, b)[0] + 0.04 if after else b + 0.3
+    return max(0.0, start), end
+
+
 def cmd_splice(vol):
     """Troca no MP3 do capítulo o trecho de cada frase listada em todo.json
-    pelo áudio regravado (patches/chMM_uKK.mp3), mantendo a pausa original
-    depois da frase. Guarda o MP3 anterior em _partes/, atualiza o script e
+    pelo áudio regravado (patches/chMM_uKK.mp3). O corte é feito nas pausas
+    reais em volta da frase (speech_bounds), mantendo o silêncio original de
+    antes e de depois. Guarda o MP3 anterior em _partes/, atualiza o script e
     realinha os capítulos alterados."""
     import subprocess
     d = vol_dir(vol)
@@ -287,25 +345,27 @@ def cmd_splice(vol):
         mp3 = d / ('ch%02d.mp3' % n)
         src = d / '_partes' / ('ch%02d_antes_emenda.mp3' % n)
         src.write_bytes(mp3.read_bytes())
-        # trechos: [original até a frase] [regravação] [pausa original] [original depois]
+        db = load_db(src)
+        # trechos: [original até a pausa antes da frase] [regravação] [original da pausa depois em diante]
         inputs = ['-i', str(src)]
         filters, labels, pos = [], [], 0.0
         for k, t in enumerate(sorted(items, key=lambda x: x['u'])):
-            u = units[t['u']]
+            # "through": a regravação cobre várias frases seguidas (ex.: os dois
+            # versos de um waka, lidos sem pausa entre eles)
+            u = {'start': units[t['u']]['start'], 'end': units[t.get('through', t['u'])]['end']}
             inside = [s for s in spans if u['start'] <= s[0] < u['end']]
-            a = min(s[2] for s in inside)                 # início da fala da frase
-            b = max(s[3] for s in inside)                 # fim da fala da frase
-            nxt = [s for s in spans if s[0] >= u['end']]
-            gap = max(0.25, (min(s[2] for s in nxt) - b) if nxt else 0.6)
-            cut = max(pos, a - 0.05)
-            filters.append('[0:a]atrim=%.3f:%.3f,asetpts=PTS-STARTPTS[o%d]' % (pos, cut, k))
+            a = min(s[2] for s in inside)                 # início alinhado da frase
+            b = max(s[3] for s in inside)                 # fim alinhado da frase
+            cut_in, cut_out = speech_bounds(db, a, b, first=(t['u'] == 0))
+            cut_in = max(pos, cut_in)
+            filters.append('[0:a]atrim=%.3f:%.3f,asetpts=PTS-STARTPTS[o%d]' % (pos, cut_in, k))
             inputs += ['-i', str(d / 'patches' / t['file'])]
             filters.append('[%d:a]aresample=44100,aformat=channel_layouts=mono,'
                            'silenceremove=start_periods=1:start_threshold=-45dB,areverse,'
                            'silenceremove=start_periods=1:start_threshold=-45dB,areverse[p%d]' % (k + 1, k))
-            filters.append('anullsrc=r=44100:cl=mono,atrim=0:%.3f[g%d]' % (gap, k))
-            labels += ['[o%d]' % k, '[p%d]' % k, '[g%d]' % k]
-            pos = b + gap
+            labels += ['[o%d]' % k, '[p%d]' % k]
+            print('   u%02d  corte %.2f–%.2f  (alinhado %.2f–%.2f)' % (t['u'], cut_in, cut_out, a, b))
+            pos = cut_out
         filters.append('[0:a]atrim=start=%.3f,asetpts=PTS-STARTPTS[tail]' % pos)
         labels.append('[tail]')
         filters.append('%sconcat=n=%d:v=0:a=1[out]' % (''.join(labels), len(labels)))
